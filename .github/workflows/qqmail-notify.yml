@@ -1,0 +1,238 @@
+yaml
+
+name: QQ邮箱通知配置
+
+# 触发条件：可以根据需要调整
+on:
+  # 推送代码时触发
+  push:
+    branches: [main, master]
+  
+  # 手动触发（用于测试）
+  workflow_dispatch:
+  
+  # PR合并时触发
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+# 环境变量配置
+env:
+  SMTP_SERVER: ${{ secrets.SMTP_HOST }}
+  SMTP_PORT: ${{ secrets.SMTP_PORT }}
+  SMTP_USER: ${{ secrets.SMTP_USERNAME }}
+  SMTP_PASS: ${{ secrets.SMTP_PASSWORD }}
+  TO_EMAILS: ${{ secrets.EMAIL_RECIPIENTS }}
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 步骤1：检查代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      # 步骤2：测试QQ邮箱连接
+      - name: Test QQ Mail Connection
+        run: |
+          echo "正在测试QQ邮箱SMTP连接..."
+          echo "服务器: $SMTP_SERVER"
+          echo "端口: $SMTP_PORT"
+          echo "用户名: $SMTP_USER"
+          echo "授权码: ${SMTP_PASS:0:4}****"  # 只显示前4位，保护隐私
+          
+      # 步骤3：使用专业的邮件发送Action
+      - name: Send QQ Mail Notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          # QQ邮箱服务器配置
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true  # QQ邮箱必须使用SSL
+          
+          # 认证信息（从Secrets读取）
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          
+          # 邮件内容
+          subject: "【GitHub通知】仓库 ${{ github.repository }} 有更新"
+          
+          # HTML格式邮件（更美观）
+          html_body: |
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body {
+                  font-family: 'Microsoft YaHei', Arial, sans-serif;
+                  line-height: 1.6;
+                  color: #333;
+                  max-width: 600px;
+                  margin: 0 auto;
+                  padding: 20px;
+                  background-color: #f5f5f5;
+                }
+                .header {
+                  background: linear-gradient(135deg, #12c2e9, #c471ed);
+                  color: white;
+                  padding: 25px;
+                  border-radius: 10px 10px 0 0;
+                  text-align: center;
+                }
+                .content {
+                  background: white;
+                  padding: 30px;
+                  border-radius: 0 0 10px 10px;
+                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .event-badge {
+                  display: inline-block;
+                  padding: 5px 12px;
+                  background: #4CAF50;
+                  color: white;
+                  border-radius: 20px;
+                  font-size: 14px;
+                  margin-bottom: 15px;
+                }
+                .info-grid {
+                  display: grid;
+                  grid-template-columns: 100px 1fr;
+                  gap: 10px;
+                  margin: 20px 0;
+                }
+                .info-label {
+                  font-weight: bold;
+                  color: #666;
+                }
+                .commit-box {
+                  background: #f8f9fa;
+                  border-left: 4px solid #3498db;
+                  padding: 15px;
+                  margin: 15px 0;
+                  border-radius: 4px;
+                }
+                .btn {
+                  display: inline-block;
+                  background: #3498db;
+                  color: white;
+                  padding: 12px 25px;
+                  text-decoration: none;
+                  border-radius: 5px;
+                  margin-top: 20px;
+                  font-weight: bold;
+                }
+                .footer {
+                  margin-top: 30px;
+                  padding-top: 20px;
+                  border-top: 1px solid #eee;
+                  font-size: 12px;
+                  color: #999;
+                  text-align: center;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>🚀 GitHub 事件通知</h1>
+                <p>您的代码仓库有新的动态</p>
+              </div>
+              
+              <div class="content">
+                <span class="event-badge">
+                  ${{ github.event_name == 'push' && '代码推送' || 
+                      github.event_name == 'pull_request' && 'PR更新' ||
+                      '仓库事件' }}
+                </span>
+                
+                <h2>${{ github.repository }}</h2>
+                
+                <div class="info-grid">
+                  <div class="info-label">📅 时间：</div>
+                  <div>$(date '+%Y-%m-%d %H:%M:%S')</div>
+                  
+                  <div class="info-label">👤 操作者：</div>
+                  <div>${{ github.actor }}</div>
+                  
+                  <div class="info-label">🌿 分支：</div>
+                  <div>${{ github.ref_name }}</div>
+                  
+                  ${{ github.event.head_commit && '
+                  <div class="info-label">📝 提交ID：</div>
+                  <div>' + github.event.head_commit.id.substring(0, 7) + '</div>
+                  ' || '' }}
+                </div>
+                
+                ${{ github.event.head_commit && '
+                <div class="commit-box">
+                  <strong>提交信息：</strong><br>
+                  ' + github.event.head_commit.message + '
+                  ' + (github.event.head_commit.author && '
+                  <div style="margin-top: 10px; color: #666;">
+                    提交者：' + github.event.head_commit.author.name + '
+                    <' + github.event.head_commit.author.email + '>
+                  </div>
+                  ' || '') + '
+                </div>
+                ' || '' }}
+                
+                ${{ github.event.pull_request && '
+                <div class="commit-box">
+                  <strong>PR信息：</strong><br>
+                  标题：' + github.event.pull_request.title + '<br>
+                  编号：#' + github.event.pull_request.number + '<br>
+                  状态：' + github.event.action + '
+                </div>
+                ' || '' }}
+                
+                <a href="https://github.com/${{ github.repository }}" class="btn">
+                  🔗 前往仓库查看
+                </a>
+                
+                <div class="footer">
+                  <p>此邮件由 GitHub Actions 自动发送<br>
+                  请不要直接回复此邮件</p>
+                  <p>如需管理通知设置，请访问仓库的 GitHub Actions 配置</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          
+          # 纯文本备用版本
+          body: |
+            尊敬的用户：
+            
+            您的 GitHub 仓库 [${{ github.repository }}] 有新的动态。
+            
+            📋 事件详情：
+            -------------------------
+            事件类型：${{ github.event_name }}
+            仓库名称：${{ github.repository }}
+            分支：${{ github.ref_name }}
+            操作者：${{ github.actor }}
+            时间：$(date '+%Y-%m-%d %H:%M:%S')
+            
+            ${{ github.event.head_commit && '提交信息：' + github.event.head_commit.message || '' }}
+            ${{ github.event.pull_request && 'PR信息：' + github.event.pull_request.title || '' }}
+            
+            🔗 查看链接：
+            https://github.com/${{ github.repository }}
+            
+            -------------------------
+            此邮件由 GitHub Actions 自动发送
+          
+          # 发件人和收件人设置
+          from: GitHub通知机器人 <466875219@qq.com>
+          to: ${{ secrets.EMAIL_RECIPIENTS }}
+          
+          # 其他配置
+          attachments: README.md  # 可选：附件
+          
+      # 步骤4：发送成功确认
+      - name: Send Success Confirmation
+        if: success()
+        run: |
+          echo "✅ QQ邮箱通知发送成功！"
+          echo "收件人: ${{ secrets.EMAIL_RECIPIENTS }}"
+          echo "发送时间: $(date)"
